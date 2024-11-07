@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <time.h>
 
-#define MAX 2000
+#define MAX 3200
 
 static bool quit = false;
 
@@ -18,6 +18,7 @@ struct {
 
 typedef struct {
     bool isEdited;
+    bool isSolved, isReturned, isSolvedTop, isSolvedBottom, isSolvedLeft, isSolvedRight;
     bool top, bottom, left, right;
 } MazePart;
 
@@ -84,17 +85,23 @@ static BITMAPINFO frame_bitmap_info;
 static HBITMAP frame_bitmap = 0;
 static HDC frame_device_context = 0;
 
+void drawLine(int x1, int y1, int x2, int y2, uint32_t color);
+
 void fillBox(int x, int y, int width, int height, uint32_t color);
 
 void drawBox(int x, int y, int width, int height, int stroke_width, uint32_t color);
 
 void drawBoxWithMaze(int x, int y, int width, int height, int stroke_width, MazePart part, uint32_t color);
 
-int generateMaze();
+int generateMaze(int size);
 
-Point player;
+int solveMaze(int size);
+
 MazePart maze[1600];
-Stack stack;
+Stack generatorHistory;
+Point playerGenerator;
+Stack solverHistory;
+Point playerSolver;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow) {
     const wchar_t window_class_name[] = L"My Window Class";
@@ -111,7 +118,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
     frame_device_context = CreateCompatibleDC(0);
 
     static HWND window_handle;
-    int window_width = 1920, window_height = 1200, width = 830, height = 850;
+    int window_width = 1920, window_height = 1200, width = 818, height = 840;
     window_handle = CreateWindow(window_class_name,
                                  L"Maze Generator And Solver",
                                  WS_OVERLAPPEDWINDOW | WS_VISIBLE,
@@ -125,7 +132,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
                                  NULL
     );
     if (window_handle == NULL) { return -1; }
-    initStack(&stack);
+    initStack(&generatorHistory);
+    initStack(&solverHistory);
 
     bool isMazeStart = false;
     int mazeHeight = 40, mazeWidth = 40;
@@ -135,35 +143,63 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
         // Clear maze
         if (!isMazeStart) {
-            int r = rand() % (4 - 1 + 1) + 1;
-            player.x = rand() % (mazeWidth - 0 + 0) + 0;
-            player.y = rand() % (mazeHeight - 0 + 0) + 0;
+            playerGenerator.x = rand() % (mazeWidth - 0 + 0) + 0;
+            playerGenerator.y = rand() % (mazeHeight - 0 + 0) + 0;
+            playerSolver.x = 0;
+            playerSolver.y = 0;
             int mazeSize = sizeof(maze) / sizeof(maze[0]);
             for (int i = 0; i < mazeSize; i++) {
-                MazePart part = {false, true, true, true, true};
+                MazePart part = {false, false, false, false, false, false, false, true, true, true, true};
                 maze[i] = part;
             }
             isMazeStart = true;
         }
 
         fillBox(0, 0, frame.width, frame.height, 0);
-        int result = generateMaze();
+
+        int result = generateMaze(mazeHeight);
         if (result == true) {
+            result = solveMaze(mazeHeight);
+        }
+        if (result == true) {
+            Sleep(1000);
             isMazeStart = false;
         }
 
         int size = 20;
         for (int y = 0; y < mazeHeight; y++) {
             for (int x = 0; x < mazeWidth; x++) {
+                MazePart part = maze[y * mazeWidth + x];
+                // if (part.isSolvedTop || part.isSolvedBottom || part.isSolvedLeft || part.isSolvedRight) {
+                //     fillBox(x * size, y * size, size, size, RGB(0, 0, 255));
+                // }
+
                 int index = y * mazeWidth + x;
                 if (index < sizeof(maze) / sizeof(maze[0])) {
                     drawBoxWithMaze(x * size, y * size, size, size, 1, maze[x + y * mazeWidth],
                                     RGB(50, 50, 50));
                 }
 
-                if (player.x == x && player.y == y) {
+                if (playerGenerator.x == x && playerGenerator.y == y) {
                     fillBox(x * size, y * size, size, size, RGB(0, 255, 0));
                 }
+
+                if (playerSolver.x == x && playerSolver.y == y) {
+                    fillBox(x * size + 10, y * size + 10, size - 20, size - 20, RGB(0, 255, 0));
+                }
+
+                if (!part.top && part.isSolvedTop)
+                    drawLine(x * size + size / 2, y * size, x * size + size / 2,
+                             y * size + size / 2, RGB(0, 0, 255));
+                if (!part.right && part.isSolvedRight)
+                    drawLine(x * size + size / 2, y * size + size / 2, x * size + size,
+                             y * size + size / 2, RGB(0, 0, 255));
+                if (!part.bottom && part.isSolvedBottom)
+                    drawLine(x * size + size / 2, y * size + size / 2,
+                             x * size + size / 2, y * size + size, RGB(0, 0, 255));
+                if (!part.left && part.isSolvedLeft)
+                    drawLine(x * size + size / 2, y * size + size / 2, x * size,
+                             y * size + size / 2, RGB(0, 0, 255));
             }
         }
 
@@ -172,6 +208,30 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
     }
 
     return 0;
+}
+
+void drawLine(int x1, int y1, int x2, int y2, uint32_t color) {
+    int dx = abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
+    int dy = abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
+    int err = (dx > dy ? dx : -dy) / 2, e2;
+
+    while (true) {
+        frame.pixels[(frame.height - y1 - 1) * frame.width + x1] = color;
+
+        if (x1 == x2 && y1 == y2) break;
+
+        e2 = err;
+
+        if (e2 > -dx) {
+            err -= dy;
+            x1 += sx;
+        }
+
+        if (e2 < dy) {
+            err += dx;
+            y1 += sy;
+        }
+    }
 }
 
 void fillBox(int x, int y, int width, int height, uint32_t color) {
@@ -220,63 +280,225 @@ Point getPointFromMaze(MazePart maze[]) {
 
 static int generateLoop = 0;
 
-int generateMaze() {
+int generateMaze(int size) {
     int r = rand() % (4 - 1 + 1) + 1;
 
     if (generateLoop == 100) {
-        player.y = pop(&stack);
-        player.x = pop(&stack);
+        playerGenerator.y = pop(&generatorHistory);
+        playerGenerator.x = pop(&generatorHistory);
         generateLoop = 0;
     }
 
-    if (player.x < 0 || player.y < 0) {
+    if (playerGenerator.x < 0 || playerGenerator.y < 0) {
         return true;
     }
 
-    if (r == 1 && player.y - 1 > -1 && !maze[player.x + (player.y - 1) * 40].isEdited) {
-        maze[player.x + player.y * 40].top = false;
-        maze[player.x + player.y * 40].isEdited = true;
-        player.y -= 1;
-        maze[player.x + player.y * 40].bottom = false;
-        maze[player.x + player.y * 40].isEdited = true;
+    if (r == 1 && playerGenerator.y - 1 > -1 && !maze[playerGenerator.x + (playerGenerator.y - 1) * size].isEdited) {
+        maze[playerGenerator.x + playerGenerator.y * size].top = false;
+        maze[playerGenerator.x + playerGenerator.y * size].isEdited = true;
+        playerGenerator.y -= 1;
+        maze[playerGenerator.x + playerGenerator.y * size].bottom = false;
+        maze[playerGenerator.x + playerGenerator.y * size].isEdited = true;
 
         generateLoop = 0;
-        push(&stack, player.x);
-        push(&stack, player.y);
-    } else if (r == 2 && player.x + 1 < 40 && !maze[(player.x + 1) + player.y * 40].isEdited) {
-        maze[player.x + player.y * 40].right = false;
-        maze[player.x + player.y * 40].isEdited = true;
-        player.x += 1;
-        maze[player.x + player.y * 40].left = false;
-        maze[player.x + player.y * 40].isEdited = true;
+        push(&generatorHistory, playerGenerator.x);
+        push(&generatorHistory, playerGenerator.y);
+    } else if (r == 2 && playerGenerator.x + 1 < size && !maze[(playerGenerator.x + 1) + playerGenerator.y * size].
+               isEdited) {
+        maze[playerGenerator.x + playerGenerator.y * size].right = false;
+        maze[playerGenerator.x + playerGenerator.y * size].isEdited = true;
+        playerGenerator.x += 1;
+        maze[playerGenerator.x + playerGenerator.y * size].left = false;
+        maze[playerGenerator.x + playerGenerator.y * size].isEdited = true;
 
         generateLoop = 0;
-        push(&stack, player.x);
-        push(&stack, player.y);
-    } else if (r == 3 && player.y + 1 < 40 && !maze[player.x + (player.y + 1) * 40].isEdited) {
-        maze[player.x + player.y * 40].bottom = false;
-        maze[player.x + player.y * 40].isEdited = true;
-        player.y += 1;
-        maze[player.x + player.y * 40].top = false;
-        maze[player.x + player.y * 40].isEdited = true;
+        push(&generatorHistory, playerGenerator.x);
+        push(&generatorHistory, playerGenerator.y);
+    } else if (r == 3 && playerGenerator.y + 1 < size && !maze[playerGenerator.x + (playerGenerator.y + 1) * size].
+               isEdited) {
+        maze[playerGenerator.x + playerGenerator.y * size].bottom = false;
+        maze[playerGenerator.x + playerGenerator.y * size].isEdited = true;
+        playerGenerator.y += 1;
+        maze[playerGenerator.x + playerGenerator.y * size].top = false;
+        maze[playerGenerator.x + playerGenerator.y * size].isEdited = true;
 
         generateLoop = 0;
-        push(&stack, player.x);
-        push(&stack, player.y);
-    } else if (r == 4 && player.x - 1 > -1 && !maze[(player.x - 1) + player.y * 40].isEdited) {
-        maze[player.x + player.y * 40].left = false;
-        maze[player.x + player.y * 40].isEdited = true;
-        player.x -= 1;
-        maze[player.x + player.y * 40].right = false;
-        maze[player.x + player.y * 40].isEdited = true;
+        push(&generatorHistory, playerGenerator.x);
+        push(&generatorHistory, playerGenerator.y);
+    } else if (r == 4 && playerGenerator.x - 1 > -1 && !maze[(playerGenerator.x - 1) + playerGenerator.y * size].
+               isEdited) {
+        maze[playerGenerator.x + playerGenerator.y * size].left = false;
+        maze[playerGenerator.x + playerGenerator.y * size].isEdited = true;
+        playerGenerator.x -= 1;
+        maze[playerGenerator.x + playerGenerator.y * size].right = false;
+        maze[playerGenerator.x + playerGenerator.y * size].isEdited = true;
 
         generateLoop = 0;
-        push(&stack, player.x);
-        push(&stack, player.y);
+        push(&generatorHistory, playerGenerator.x);
+        push(&generatorHistory, playerGenerator.y);
     } else {
         generateLoop++;
-        generateMaze();
+        generateMaze(size);
     }
+
+    return false;
+}
+
+int isReturn = false;
+
+int solveMaze(int size) {
+    // Sleep(10);
+
+    if (isReturn == true) {
+        isReturn = false;
+        push(&solverHistory, playerSolver.x);
+        push(&solverHistory, playerSolver.y);
+    }
+
+    if (playerSolver.x < 0 || playerSolver.y < 0 || (playerSolver.x == size - 1 && playerSolver.y == size - 1)) {
+        return true;
+    }
+
+    if (playerSolver.y - 1 > -1 && !maze[playerSolver.x + (playerSolver.y - 1) * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].top) {
+        maze[playerSolver.x + playerSolver.y * size].isSolvedTop = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+        playerSolver.y -= 1;
+        maze[playerSolver.x + playerSolver.y * size].isSolvedBottom = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+
+        generateLoop = 0;
+        push(&solverHistory, playerSolver.x);
+        push(&solverHistory, playerSolver.y);
+        return false;
+    }
+    if (playerSolver.x + 1 < size && !maze[(playerSolver.x + 1) + playerSolver.y * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].right) {
+        maze[playerSolver.x + playerSolver.y * size].isSolvedRight = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+        playerSolver.x += 1;
+        maze[playerSolver.x + playerSolver.y * size].isSolvedLeft = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+
+        generateLoop = 0;
+        push(&solverHistory, playerSolver.x);
+        push(&solverHistory, playerSolver.y);
+        return false;
+    }
+    if (playerSolver.y + 1 < size && !maze[playerSolver.x + (playerSolver.y + 1) * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].bottom) {
+        maze[playerSolver.x + playerSolver.y * size].isSolvedBottom = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+        playerSolver.y += 1;
+        maze[playerSolver.x + playerSolver.y * size].isSolvedTop = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+
+        generateLoop = 0;
+        push(&solverHistory, playerSolver.x);
+        push(&solverHistory, playerSolver.y);
+        return false;
+    }
+    if (playerSolver.x - 1 > -1 && !maze[(playerSolver.x - 1) + playerSolver.y * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].left) {
+        maze[playerSolver.x + playerSolver.y * size].isSolvedLeft = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+        playerSolver.x -= 1;
+        maze[playerSolver.x + playerSolver.y * size].isSolvedRight = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+
+        generateLoop = 0;
+        push(&solverHistory, playerSolver.x);
+        push(&solverHistory, playerSolver.y);
+        return false;
+    }
+
+
+    // Return
+    if (playerSolver.y - 1 > -1 && maze[playerSolver.x + (playerSolver.y - 1) * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].top && !maze[playerSolver.x + (playerSolver.y - 1) * size].
+        isReturned) {
+        maze[playerSolver.x + playerSolver.y * size].isSolvedTop = false;
+        maze[playerSolver.x + playerSolver.y * size].isReturned = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+        playerSolver.y -= 1;
+        maze[playerSolver.x + playerSolver.y * size].isSolvedBottom = false;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+
+        generateLoop = 0;
+        push(&solverHistory, playerSolver.x);
+        push(&solverHistory, playerSolver.y);
+        return false;
+    }
+    if (playerSolver.x + 1 < size && maze[(playerSolver.x + 1) + playerSolver.y * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].right && !maze[(playerSolver.x + 1) + playerSolver.y * size].
+        isReturned) {
+        maze[playerSolver.x + playerSolver.y * size].isSolvedRight = false;
+        maze[playerSolver.x + playerSolver.y * size].isReturned = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+        playerSolver.x += 1;
+        maze[playerSolver.x + playerSolver.y * size].isSolvedLeft = false;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+
+        generateLoop = 0;
+        push(&solverHistory, playerSolver.x);
+        push(&solverHistory, playerSolver.y);
+        return false;
+    }
+    if (playerSolver.y + 1 < size && maze[playerSolver.x + (playerSolver.y + 1) * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].bottom && !maze[playerSolver.x + (playerSolver.y + 1) * size].
+        isReturned) {
+        maze[playerSolver.x + playerSolver.y * size].isSolvedBottom = false;
+        maze[playerSolver.x + playerSolver.y * size].isReturned = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+        playerSolver.y += 1;
+        maze[playerSolver.x + playerSolver.y * size].isSolvedTop = false;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+
+        generateLoop = 0;
+        push(&solverHistory, playerSolver.x);
+        push(&solverHistory, playerSolver.y);
+        return false;
+    }
+    if (playerSolver.x - 1 > -1 && maze[(playerSolver.x - 1) + playerSolver.y * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].left && !maze[(playerSolver.x - 1) + playerSolver.y * size].
+        isReturned) {
+        maze[playerSolver.x + playerSolver.y * size].isSolvedLeft = false;
+        maze[playerSolver.x + playerSolver.y * size].isReturned = true;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+        playerSolver.x -= 1;
+        maze[playerSolver.x + playerSolver.y * size].isSolvedRight = false;
+        maze[playerSolver.x + playerSolver.y * size].isSolved = true;
+
+        generateLoop = 0;
+        push(&solverHistory, playerSolver.x);
+        push(&solverHistory, playerSolver.y);
+        return false;
+    }
+
+    MazePart part = maze[playerSolver.x + playerSolver.y * size];
+    printf("Stuck");
+
+    // else {
+    //     MazePart part = maze[playerSolver.x + playerSolver.y * size];
+    //
+    //     int count = 0;
+    //     if (!part.top) count++;
+    //     if (!part.right) count++;
+    //     if (!part.bottom) count++;
+    //     if (!part.left) count++;
+    //
+    //     if (count > 2) {
+    //         printf("Big");
+    //         isReturn = true;
+    //     }
+    //     part.isSolvedTop = false;
+    //     part.isSolvedRight = false;
+    //     part.isSolvedBottom = false;
+    //     part.isSolvedLeft = false;
+    //     maze[playerSolver.x + playerSolver.y * size] = part;
+    //     playerSolver.y = pop(&solverHistory);
+    //     playerSolver.x = pop(&solverHistory);
+    // }
 
     return false;
 }
