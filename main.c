@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <time.h>
 
-#define MAX 3200
+#define MAX 12800
 
 static bool quit = false;
 
@@ -49,17 +49,16 @@ int isFull(Stack *stack) {
 // Push an element onto the stack
 void push(Stack *stack, int value) {
     if (isFull(stack)) {
-        printf("Stack overflow\n");
+        printf("Stack is full\n");
         return;
     }
     stack->arr[++stack->top] = value; // Increment top and insert the value
-    printf("Pushed %d onto the stack\n", value);
 }
 
 // Pop an element from the stack
 int pop(Stack *stack) {
     if (isEmpty(stack)) {
-        printf("Stack underflow\n");
+        printf("Stack is empty\n");
         return -1; // Return -1 as an error code
     }
     return stack->arr[stack->top--]; // Return top element and decrement top
@@ -93,7 +92,7 @@ void drawBox(int x, int y, int width, int height, int stroke_width, uint32_t col
 
 void drawBoxWithMaze(int x, int y, int width, int height, int stroke_width, MazePart part, uint32_t color);
 
-int generateMaze(int size);
+int generateMaze(int size, int isReturn);
 
 int solveMaze(int size);
 
@@ -102,6 +101,7 @@ Stack generatorHistory;
 Point playerGenerator;
 Stack solverHistory;
 Point playerSolver;
+Point endPoint;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow) {
     const wchar_t window_class_name[] = L"My Window Class";
@@ -145,8 +145,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
         if (!isMazeStart) {
             playerGenerator.x = rand() % (mazeWidth - 0 + 0) + 0;
             playerGenerator.y = rand() % (mazeHeight - 0 + 0) + 0;
-            playerSolver.x = 0;
-            playerSolver.y = 0;
+            playerSolver.x = rand() % (mazeWidth - 0 + 0) + 0;
+            playerSolver.y = rand() % (mazeHeight - 0 + 0) + 0;
+            endPoint.x = rand() % (mazeWidth - 0 + 0) + 0;
+            endPoint.y = rand() % (mazeHeight - 0 + 0) + 0;
+            while (!isEmpty(&solverHistory)) {
+                pop(&solverHistory);
+            }
+
+            while (!isEmpty(&generatorHistory)) {
+                pop(&generatorHistory);
+            }
+
             int mazeSize = sizeof(maze) / sizeof(maze[0]);
             for (int i = 0; i < mazeSize; i++) {
                 MazePart part = {false, false, false, false, false, false, false, true, true, true, true};
@@ -157,10 +167,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
         fillBox(0, 0, frame.width, frame.height, 0);
 
-        int result = generateMaze(mazeHeight);
+        int result = generateMaze(mazeHeight, false);
+        while (!result) {
+            result = generateMaze(mazeHeight, true);
+        }
+
         if (result == true) {
             result = solveMaze(mazeHeight);
+            // while (!result) {
+            //     result = solveMaze(mazeHeight);
+            // }
         }
+
         if (result == true) {
             Sleep(1000);
             isMazeStart = false;
@@ -185,7 +203,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
                 }
 
                 if (playerSolver.x == x && playerSolver.y == y) {
-                    fillBox(x * size + 10, y * size + 10, size - 20, size - 20, RGB(0, 255, 0));
+                    fillBox(x * size + 4, y * size + 4, size - 8, size - 8, RGB(0, 255, 0));
+                }
+
+                if (endPoint.x == x && endPoint.y == y) {
+                    fillBox(x * size + 4, y * size + 4, size - 8, size - 8, RGB(0, 0, 255));
                 }
 
                 if (!part.top && part.isSolvedTop)
@@ -216,7 +238,8 @@ void drawLine(int x1, int y1, int x2, int y2, uint32_t color) {
     int err = (dx > dy ? dx : -dy) / 2, e2;
 
     while (true) {
-        frame.pixels[(frame.height - y1 - 1) * frame.width + x1] = color;
+        if (frame.width != 0 && frame.height != 0)
+            frame.pixels[(frame.height - y1 - 1) * frame.width + x1] = color;
 
         if (x1 == x2 && y1 == y2) break;
 
@@ -280,7 +303,9 @@ Point getPointFromMaze(MazePart maze[]) {
 
 static int generateLoop = 0;
 
-int generateMaze(int size) {
+int generateMaze(int size, int isReturn) {
+    // if (!isReturn) Sleep(10);
+
     int r = rand() % (4 - 1 + 1) + 1;
 
     if (generateLoop == 100) {
@@ -338,7 +363,7 @@ int generateMaze(int size) {
         push(&generatorHistory, playerGenerator.y);
     } else {
         generateLoop++;
-        generateMaze(size);
+        generateMaze(size, true);
     }
 
     return false;
@@ -346,8 +371,12 @@ int generateMaze(int size) {
 
 int isReturn = false;
 
+double calculateDistance(Point p1, Point p2) {
+    return sqrt(pow(p2.x - p1.x, 2) + pow(p2.y - p1.y, 2));
+}
+
 int solveMaze(int size) {
-    // Sleep(10);
+    // Sleep(1);
 
     if (isReturn == true) {
         isReturn = false;
@@ -355,11 +384,46 @@ int solveMaze(int size) {
         push(&solverHistory, playerSolver.y);
     }
 
-    if (playerSolver.x < 0 || playerSolver.y < 0 || (playerSolver.x == size - 1 && playerSolver.y == size - 1)) {
+    if (playerSolver.x < 0 || playerSolver.y < 0 || (playerSolver.x == endPoint.x && playerSolver.y == endPoint.y)) {
         return true;
     }
 
+    int side = 0;
+    int minDistance = 10000;
+
+    const Point nPlayer1 = {playerSolver.x, playerSolver.y - 1};
+    int currentDistance = calculateDistance(nPlayer1, endPoint);
     if (playerSolver.y - 1 > -1 && !maze[playerSolver.x + (playerSolver.y - 1) * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].top && minDistance > currentDistance) {
+        side = 0;
+        minDistance = currentDistance;
+    }
+
+    const Point nPlayer2 = {playerSolver.x + 1, playerSolver.y};
+    currentDistance = calculateDistance(nPlayer2, endPoint);
+    if (playerSolver.x + 1 < size && !maze[(playerSolver.x + 1) + playerSolver.y * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].right && minDistance > currentDistance) {
+        side = 1;
+        minDistance = currentDistance;
+    }
+
+    const Point nPlayer3 = {playerSolver.x, playerSolver.y + 1};
+    currentDistance = calculateDistance(nPlayer3, endPoint);
+    if (playerSolver.y + 1 < size && !maze[playerSolver.x + (playerSolver.y + 1) * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].bottom && minDistance > currentDistance) {
+        side = 2;
+        minDistance = currentDistance;
+    }
+
+    const Point nPlayer4 = {playerSolver.x - 1, playerSolver.y};
+    currentDistance = calculateDistance(nPlayer4, endPoint);
+    if (playerSolver.x - 1 > -1 && !maze[(playerSolver.x - 1) + playerSolver.y * size].isSolved && !maze[
+            playerSolver.x + playerSolver.y * size].left && minDistance > currentDistance) {
+        side = 3;
+        minDistance = currentDistance;
+    }
+
+    if (side == 0 && playerSolver.y - 1 > -1 && !maze[playerSolver.x + (playerSolver.y - 1) * size].isSolved && !maze[
             playerSolver.x + playerSolver.y * size].top) {
         maze[playerSolver.x + playerSolver.y * size].isSolvedTop = true;
         maze[playerSolver.x + playerSolver.y * size].isSolved = true;
@@ -372,7 +436,7 @@ int solveMaze(int size) {
         push(&solverHistory, playerSolver.y);
         return false;
     }
-    if (playerSolver.x + 1 < size && !maze[(playerSolver.x + 1) + playerSolver.y * size].isSolved && !maze[
+    if (side == 1 && playerSolver.x + 1 < size && !maze[(playerSolver.x + 1) + playerSolver.y * size].isSolved && !maze[
             playerSolver.x + playerSolver.y * size].right) {
         maze[playerSolver.x + playerSolver.y * size].isSolvedRight = true;
         maze[playerSolver.x + playerSolver.y * size].isSolved = true;
@@ -385,7 +449,7 @@ int solveMaze(int size) {
         push(&solverHistory, playerSolver.y);
         return false;
     }
-    if (playerSolver.y + 1 < size && !maze[playerSolver.x + (playerSolver.y + 1) * size].isSolved && !maze[
+    if (side == 2 && playerSolver.y + 1 < size && !maze[playerSolver.x + (playerSolver.y + 1) * size].isSolved && !maze[
             playerSolver.x + playerSolver.y * size].bottom) {
         maze[playerSolver.x + playerSolver.y * size].isSolvedBottom = true;
         maze[playerSolver.x + playerSolver.y * size].isSolved = true;
@@ -398,7 +462,7 @@ int solveMaze(int size) {
         push(&solverHistory, playerSolver.y);
         return false;
     }
-    if (playerSolver.x - 1 > -1 && !maze[(playerSolver.x - 1) + playerSolver.y * size].isSolved && !maze[
+    if (side == 3 && playerSolver.x - 1 > -1 && !maze[(playerSolver.x - 1) + playerSolver.y * size].isSolved && !maze[
             playerSolver.x + playerSolver.y * size].left) {
         maze[playerSolver.x + playerSolver.y * size].isSolvedLeft = true;
         maze[playerSolver.x + playerSolver.y * size].isSolved = true;
