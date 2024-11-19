@@ -37,12 +37,12 @@ void initStack(Stack *stack) {
 }
 
 // Check if the stack is empty
-int isEmpty(Stack *stack) {
+int isEmpty(const Stack *stack) {
     return stack->top == -1;
 }
 
 // Check if the stack is full
-int isFull(Stack *stack) {
+int isFull(const Stack *stack) {
     return stack->top == MAX - 1;
 }
 
@@ -65,7 +65,7 @@ int pop(Stack *stack) {
 }
 
 // Peek the top element
-int peek(Stack *stack) {
+int peek(const Stack *stack) {
     if (isEmpty(stack)) {
         printf("Stack is empty\n");
         return -1;
@@ -136,8 +136,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
     initStack(&solverHistory);
 
     bool isMazeStart = false;
-    int mazeHeight = 40, mazeWidth = 40;
     while (!quit) {
+        const int mazeWidth = 40, mazeHeight = 40;
         static MSG message = {0};
         while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) { DispatchMessage(&message); }
 
@@ -184,13 +184,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
             isMazeStart = false;
         }
 
-        int size = 20;
         for (int y = 0; y < mazeHeight; y++) {
             for (int x = 0; x < mazeWidth; x++) {
-                MazePart part = maze[y * mazeWidth + x];
-                // if (part.isSolvedTop || part.isSolvedBottom || part.isSolvedLeft || part.isSolvedRight) {
-                //     fillBox(x * size, y * size, size, size, RGB(0, 0, 255));
-                // }
+                int size = 20;
+                const MazePart part = maze[y * mazeWidth + x];
 
                 int index = y * mazeWidth + x;
                 if (index < sizeof(maze) / sizeof(maze[0])) {
@@ -233,9 +230,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 }
 
 void drawLine(int x1, int y1, int x2, int y2, uint32_t color) {
-    int dx = abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
-    int dy = abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
-    int err = (dx > dy ? dx : -dy) / 2, e2;
+    const int dx = abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
+    const int dy = abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
+    int err = (dx > dy ? dx : -dy) / 2;
 
     while (true) {
         if (frame.width != 0 && frame.height != 0)
@@ -243,7 +240,7 @@ void drawLine(int x1, int y1, int x2, int y2, uint32_t color) {
 
         if (x1 == x2 && y1 == y2) break;
 
-        e2 = err;
+        int e2 = err;
 
         if (e2 > -dx) {
             err -= dy;
@@ -292,13 +289,6 @@ void drawBoxWithMaze(int x, int y, int width, int height, int stroke_width, Maze
                 frame.pixels[xx + yy * frame.width] = color;
         }
     }
-}
-
-Point getPointFromMaze(MazePart maze[]) {
-    Point point;
-    int mazeSize = sizeof(maze) / sizeof(maze[0]);
-    point.x = mazeSize % 40;
-    point.y = mazeSize / 40;
 }
 
 static int generateLoop = 0;
@@ -376,7 +366,7 @@ double calculateDistance(Point p1, Point p2) {
 }
 
 int solveMaze(int size) {
-    // Sleep(1);
+    // Sleep(5);
 
     if (isReturn == true) {
         isReturn = false;
@@ -420,7 +410,6 @@ int solveMaze(int size) {
     if (playerSolver.x - 1 > -1 && !maze[(playerSolver.x - 1) + playerSolver.y * size].isSolved && !maze[
             playerSolver.x + playerSolver.y * size].left && minDistance > currentDistance) {
         side = 3;
-        minDistance = currentDistance;
     }
 
     if (side == 0 && playerSolver.y - 1 > -1 && !maze[playerSolver.x + (playerSolver.y - 1) * size].isSolved && !maze[
@@ -539,31 +528,7 @@ int solveMaze(int size) {
         return false;
     }
 
-    MazePart part = maze[playerSolver.x + playerSolver.y * size];
     printf("Stuck");
-
-    // else {
-    //     MazePart part = maze[playerSolver.x + playerSolver.y * size];
-    //
-    //     int count = 0;
-    //     if (!part.top) count++;
-    //     if (!part.right) count++;
-    //     if (!part.bottom) count++;
-    //     if (!part.left) count++;
-    //
-    //     if (count > 2) {
-    //         printf("Big");
-    //         isReturn = true;
-    //     }
-    //     part.isSolvedTop = false;
-    //     part.isSolvedRight = false;
-    //     part.isSolvedBottom = false;
-    //     part.isSolvedLeft = false;
-    //     maze[playerSolver.x + playerSolver.y * size] = part;
-    //     playerSolver.y = pop(&solverHistory);
-    //     playerSolver.x = pop(&solverHistory);
-    // }
-
     return false;
 }
 
