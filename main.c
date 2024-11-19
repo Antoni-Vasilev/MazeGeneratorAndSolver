@@ -48,7 +48,6 @@ int isFull(const Stack *stack) {
 // Push an element onto the stack
 void push(Stack *stack, int value) {
     if (isFull(stack)) {
-        printf("Stack is full\n");
         return;
     }
     stack->arr[++stack->top] = value; // Increment top and insert the value
@@ -57,7 +56,6 @@ void push(Stack *stack, int value) {
 // Pop an element from the stack
 int pop(Stack *stack) {
     if (isEmpty(stack)) {
-        printf("Stack is empty\n");
         return -1; // Return -1 as an error code
     }
     return stack->arr[stack->top--]; // Return top element and decrement top
@@ -66,7 +64,6 @@ int pop(Stack *stack) {
 // Peek the top element
 int peek(const Stack *stack) {
     if (isEmpty(stack)) {
-        printf("Stack is empty\n");
         return -1;
     }
     return stack->arr[stack->top];
