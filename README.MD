@@ -30,7 +30,3 @@ MazeGeneratorAndSolver е проект, който демонстрира осн
    ```shell
    gcc main.c -o MazeGeneratorAndSolver.exe -lgdi32 -mwindows
    ```
-   
-## Снимки
-<img src="https://raw.githubusercontent.com/Antoni-Vasilev/MazeGeneratorAndSolver/refs/heads/master/Images/Screenshot_Game_1.png?token=GHSAT0AAAAAACZZAQ2P3BAR5KMBK25S2TCUZZ4WJQQ" width="400">
-<img src="https://raw.githubusercontent.com/Antoni-Vasilev/MazeGeneratorAndSolver/refs/heads/master/Images/Screenshot_Game_2.png?token=GHSAT0AAAAAACZZAQ2PM7DH35KZ6E4C6FMQZZ4WI3A" width="400">
