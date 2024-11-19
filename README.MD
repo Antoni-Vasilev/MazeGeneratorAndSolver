@@ -32,5 +32,5 @@ MazeGeneratorAndSolver е проект, който демонстрира осн
    ```
    
 ## Снимки
-<img src="https://raw.githubusercontent.com/Antoni-Vasilev/MazeGeneratorAndSolver/refs/heads/master/Images/Screenshot_Game_1.png?token=GHSAT0AAAAAACZZAQ2P3BAR5KMBK25S2TCUZZ4WJQQ" width="300">
-<img src="https://raw.githubusercontent.com/Antoni-Vasilev/MazeGeneratorAndSolver/refs/heads/master/Images/Screenshot_Game_2.png?token=GHSAT0AAAAAACZZAQ2PM7DH35KZ6E4C6FMQZZ4WI3A" width="300">
+<img src="https://raw.githubusercontent.com/Antoni-Vasilev/MazeGeneratorAndSolver/refs/heads/master/Images/Screenshot_Game_1.png?token=GHSAT0AAAAAACZZAQ2P3BAR5KMBK25S2TCUZZ4WJQQ" width="200">
+<img src="https://raw.githubusercontent.com/Antoni-Vasilev/MazeGeneratorAndSolver/refs/heads/master/Images/Screenshot_Game_2.png?token=GHSAT0AAAAAACZZAQ2PM7DH35KZ6E4C6FMQZZ4WI3A" width="200">
