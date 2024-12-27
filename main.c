@@ -27,41 +27,41 @@ typedef struct {
 
 typedef struct Stack {
     int arr[MAX];
-    int top; // Index of the top element
+    int top;
 } Stack;
 
-// Initialize the stack
+
 void initStack(Stack *stack) {
-    stack->top = -1; // Indicates an empty stack
+    stack->top = -1;
 }
 
-// Check if the stack is empty
+
 int isEmpty(const Stack *stack) {
     return stack->top == -1;
 }
 
-// Check if the stack is full
+
 int isFull(const Stack *stack) {
     return stack->top == MAX - 1;
 }
 
-// Push an element onto the stack
+
 void push(Stack *stack, int value) {
     if (isFull(stack)) {
         return;
     }
-    stack->arr[++stack->top] = value; // Increment top and insert the value
+    stack->arr[++stack->top] = value;
 }
 
-// Pop an element from the stack
+
 int pop(Stack *stack) {
     if (isEmpty(stack)) {
-        return -1; // Return -1 as an error code
+        return -1;
     }
-    return stack->arr[stack->top--]; // Return top element and decrement top
+    return stack->arr[stack->top--];
 }
 
-// Peek the top element
+
 int peek(const Stack *stack) {
     if (isEmpty(stack)) {
         return -1;
@@ -88,9 +88,9 @@ void drawBox(int x, int y, int width, int height, int stroke_width, uint32_t col
 
 void drawBoxWithMaze(int x, int y, int width, int height, int stroke_width, MazePart part, uint32_t color);
 
-int generateMaze(int size, int isReturn);
+int generateMaze(int size, int isReturn, int generate);
 
-int solveMaze(int size);
+int solveMaze(int size, int solve);
 
 MazePart maze[1600];
 Stack generatorHistory;
@@ -100,6 +100,19 @@ Point playerSolver;
 Point endPoint;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow) {
+    int generate, solve, wait;
+    int all = sscanf(pCmdLine, "%d %d %d", &generate, &solve, &wait);
+    if (all == 0) {
+        generate = -1;
+        solve = 0;
+        wait = 1000;
+    } else if (all == 1) {
+        solve = 0;
+        wait = 1000;
+    } else if (all == 2) {
+        wait = 1000;
+    }
+
     const wchar_t window_class_name[] = L"My Window Class";
     static WNDCLASS window_class = {0};
     window_class.lpfnWndProc = WindowProcessMessage;
@@ -163,20 +176,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
         fillBox(0, 0, frame.width, frame.height, 0);
 
-        int result = generateMaze(mazeHeight, false);
-        while (!result) {
-            result = generateMaze(mazeHeight, true);
+        int result = generateMaze(mazeHeight, false, generate);
+        if (generate < 0) {
+            while (!result) {
+                result = generateMaze(mazeHeight, true, generate);
+            }
         }
 
         if (result == true) {
-            result = solveMaze(mazeHeight);
-            // while (!result) {
-            //     result = solveMaze(mazeHeight);
-            // }
+            result = solveMaze(mazeHeight, solve);
+            if (solve < 0) {
+                while (!result) {
+                    result = solveMaze(mazeHeight, solve);
+                }
+            }
         }
 
         if (result == true) {
-            Sleep(1000);
+            if (wait > 0) Sleep(wait);
             isMazeStart = false;
         }
 
@@ -289,8 +306,8 @@ void drawBoxWithMaze(int x, int y, int width, int height, int stroke_width, Maze
 
 static int generateLoop = 0;
 
-int generateMaze(int size, int isReturn) {
-    // if (!isReturn) Sleep(10);
+int generateMaze(int size, int isReturn, int generate) {
+    if (!isReturn && generate > 0) Sleep(generate);
 
     int r = rand() % (4 - 1 + 1) + 1;
 
@@ -349,7 +366,7 @@ int generateMaze(int size, int isReturn) {
         push(&generatorHistory, playerGenerator.y);
     } else {
         generateLoop++;
-        generateMaze(size, true);
+        generateMaze(size, true, generate);
     }
 
     return false;
@@ -361,8 +378,8 @@ double calculateDistance(Point p1, Point p2) {
     return sqrt(pow(p2.x - p1.x, 2) + pow(p2.y - p1.y, 2));
 }
 
-int solveMaze(int size) {
-    // Sleep(5);
+int solveMaze(int size, int solve) {
+    if (solve > 0) Sleep(solve);
 
     if (isReturn == true) {
         isReturn = false;
